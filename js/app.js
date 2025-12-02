@@ -30,7 +30,7 @@
 
   function shell(content) {
     const top = el('header', { class: 'topbar' }, [
-      el('h1', {}, 'GymControl')
+      el('h1', { class: 'logo-clickable', onclick: () => navigate('home') }, 'GymControl')
     ]);
     const main = el('main', { class: 'content' }, [content]);
     return el('div', { class: 'app-shell' }, [top, main]);
@@ -116,17 +116,32 @@
     const treinos = await window.DB.listarTreinos();
 
     const list = treinos.length
-      ? treinos.map((t) =>
-          el('div', {
-            class: 'card',
+      ? treinos.map((t) => {
+          const title = el('div', {
+            class: 'card-title',
             onclick: () => navigate('treino', { id: t.id })
-          }, [
-            el('div', { class: 'card-title' }, [t.nome]),
+          }, [t.nome]);
+
+          const playBtn = el('button', {
+            class: 'btn icon-btn',
+            onclick: (ev) => {
+              ev.stopPropagation();
+              navigate('execucao', { treino_id: t.id });
+            }
+          }, ['▶']);
+
+          const headerRow = el('div', { class: 'card-header-row' }, [
+            title,
+            playBtn
+          ]);
+
+          return el('div', { class: 'card' }, [
+            headerRow,
             el('div', { class: 'muted' }, [
               `Criado em ${formatDate(t.criado_em)}`
             ])
-          ])
-        )
+          ]);
+        })
       : el('p', { class: 'muted' }, [
           'Nenhum treino cadastrado ainda.'
         ]);
@@ -142,8 +157,7 @@
       fab
     ]);
   }
-
-  // ----- cadastro/edição de treino -----
+// ----- cadastro/edição de treino -----
   async function renderTreino(params) {
     const treinoId = params.id ? Number(params.id) : null;
     const editMode = !!treinoId;
