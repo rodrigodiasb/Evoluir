@@ -1,4 +1,4 @@
-// js/app.js - SPA simples para GymControl (com Backup/Configurações)
+// js/app.js - SPA GymControl (com Backup, Play na lista e marcação de exercício realizado)
 (function () {
   const root = document.getElementById('root');
 
@@ -118,7 +118,7 @@
     const list = treinos.length
       ? treinos.map((t) => {
           const title = el('div', {
-            class: 'card-title',
+            class: 'card-title card-title-link',
             onclick: () => navigate('treino', { id: t.id })
           }, [t.nome]);
 
@@ -157,7 +157,8 @@
       fab
     ]);
   }
-// ----- cadastro/edição de treino -----
+
+  // ----- cadastro/edição de treino -----
   async function renderTreino(params) {
     const treinoId = params.id ? Number(params.id) : null;
     const editMode = !!treinoId;
@@ -326,7 +327,7 @@
         }, ['Excluir treino'])
       : null;
 
-    const actions = el('div', { class: 'btn-row' }, [
+    const actions = el('div', { class: 'btn-row btn-row-wrap' }, [
       btnSalvar,
       btnExecutar,
       btnExcluir
@@ -375,15 +376,16 @@
         'data-ex-id': e.id
       }, []);
 
-      const nameLine = el('div', { class: 'exec-name' }, [
-        `${idx + 1}. ${e.nome}`
+      const statusPill = el('span', { class: 'badge' }, ['Em andamento']);
+
+      const nameLine = el('div', { class: 'exec-name-row' }, [
+        el('div', { class: 'exec-name' }, [`${idx + 1}. ${e.nome}`]),
+        statusPill
       ]);
 
-      const baseLine = el('div', { class: 'muted' }, [
+      const baseLine = el('div', { class: 'muted exec-base' }, [
         `Base: ${e.repeticoes || 0} reps · ${e.carga || 0} kg`
       ]);
-
-      const left = el('div', {}, [nameLine, baseLine]);
 
       const repsInput = el('input', {
         type: 'number',
@@ -400,13 +402,27 @@
         step: 0.5
       });
 
-      const right = el('div', {}, [
-        repsInput,
-        cargaInput
+      const doneBtn = el('button', {
+        class: 'btn secondary btn-done',
+        onclick: () => {
+          const done = block.classList.toggle('done');
+          statusPill.textContent = done ? 'Concluído' : 'Em andamento';
+        }
+      }, ['Realizado!']);
+
+      const actions = el('div', { class: 'exec-actions' }, [
+        el('div', { class: 'exec-inputs' }, [
+          el('label', { class: 'exec-label' }, ['Reps']),
+          repsInput,
+          el('label', { class: 'exec-label' }, ['Kg']),
+          cargaInput
+        ]),
+        doneBtn
       ]);
 
-      block.appendChild(left);
-      block.appendChild(right);
+      block.appendChild(nameLine);
+      block.appendChild(baseLine);
+      block.appendChild(actions);
       return block;
     });
 
@@ -416,7 +432,7 @@
     ]);
 
     const btnFinalizar = el('button', {
-      class: 'btn primary',
+      class: 'btn primary btn-full',
       onclick: async () => {
         const blocksEls = Array.from(container.querySelectorAll('.exec-block'));
         const items = blocksEls.map((b) => ({
@@ -432,7 +448,7 @@
         await window.DB.salvarSessao({ treino_id: treinoId }, items);
 
         if (confirm('Deseja atualizar o treino base com os números desta sessão?')) {
-          // AGORA ATUALIZA PELO ID DO EXERCÍCIO, NÃO PELO NOME
+          // Atualiza pelo ID do exercício
           for (const it of items) {
             if (!it.exercicio_id) continue;
             await window.DB.atualizarExercicio(it.exercicio_id, {
@@ -523,9 +539,8 @@
       'Aqui você pode exportar todos os seus dados (treinos, exercícios e sessões) para um arquivo JSON e importar em outro dispositivo.'
     ]);
 
-    // botão exportar
     const btnExport = el('button', {
-      class: 'btn primary',
+      class: 'btn primary btn-full',
       onclick: async () => {
         try {
           const [treinos, exercicios, sessoes, sessoes_exercicios] = await Promise.all([
@@ -563,7 +578,6 @@
       }
     }, ['Exportar dados (JSON)']);
 
-    // input de arquivo para importação
     const fileInput = el('input', {
       type: 'file',
       accept: 'application/json',
@@ -624,7 +638,6 @@
           console.error(err);
           alert('Erro ao importar dados. Verifique se o arquivo é um backup válido.');
         } finally {
-          // limpa o valor para permitir importar o mesmo arquivo novamente se quiser
           fileInput.value = '';
         }
       };
@@ -633,11 +646,11 @@
     });
 
     const btnImport = el('button', {
-      class: 'btn ghost',
+      class: 'btn ghost btn-full',
       onclick: () => fileInput.click()
     }, ['Importar dados de arquivo']);
 
-    const actions = el('div', { class: 'btn-row' }, [
+    const actions = el('div', { class: 'stack' }, [
       btnExport,
       btnImport
     ]);
