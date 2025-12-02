@@ -1,4 +1,4 @@
-// js/app.js - SPA simples para GymControl
+// js/app.js - SPA simples para GymControl (com Backup/Configurações)
 (function () {
   const root = document.getElementById('root');
 
@@ -64,7 +64,8 @@
     treino: renderTreino,
     execucao: renderExecucao,
     historico: renderHistorico,
-    sessao: renderSessao
+    sessao: renderSessao,
+    config: renderConfig
   };
 
   function navigate(route, params) {
@@ -98,7 +99,8 @@
   function renderHome() {
     const grid = el('div', { class: 'grid' }, [
       card('🏋️', 'Meus treinos', () => navigate('treinos')),
-      card('📅', 'Histórico de sessões', () => navigate('historico'))
+      card('📅', 'Histórico de sessões', () => navigate('historico')),
+      card('☁️', 'Backup & Configurações', () => navigate('config'), 'Exportar / importar dados')
     ]);
 
     return el('div', {}, [
@@ -497,6 +499,143 @@
       el('h2', {}, ['Sessão']),
       ...list
     ]);
+  }
+
+  // ----- Backup & Configurações -----
+  function renderConfig() {
+    const db = window.DB.db;
+
+    const info = el('p', { class: 'muted' }, [
+      'Aqui você pode exportar todos os seus dados (treinos, exercícios e sessões) para um arquivo JSON e importar em outro dispositivo.'
+    ]);
+
+    // botão exportar
+    const btnExport = el('button', {
+      class: 'btn primary',
+      onclick: async () => {
+        try {
+          const [treinos, exercicios, sessoes, sessoes_exercicios] = await Promise.all([
+            db.treinos.toArray(),
+            db.exercicios.toArray(),
+            db.sessoes.toArray(),
+            db.sessoes_exercicios.toArray()
+          ]);
+
+          const payload = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            treinos,
+            exercicios,
+            sessoes,
+            sessoes_exercicios
+          };
+
+          const blob = new Blob(
+            [JSON.stringify(payload, null, 2)],
+            { type: 'application/json' }
+          );
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'gymcontrol-backup.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao exportar dados. Verifique o console para mais detalhes.');
+        }
+      }
+    }, ['Exportar dados (JSON)']);
+
+    // input de arquivo para importação
+    const fileInput = el('input', {
+      type: 'file',
+      accept: 'application/json',
+      style: 'display:none'
+    });
+
+    fileInput.addEventListener('change', async (ev) => {
+      const file = ev.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const text = e.target.result;
+          const data = JSON.parse(text);
+
+          if (!data || typeof data !== 'object' || !Array.isArray(data.treinos)) {
+            alert('Arquivo inválido ou em formato inesperado.');
+            return;
+          }
+
+          const confirmar = confirm(
+            'A importação irá SUBSTITUIR todos os dados atuais (treinos, exercícios e sessões) pelos dados do arquivo. Deseja continuar?'
+          );
+          if (!confirmar) return;
+
+          await db.transaction('rw',
+            db.treinos,
+            db.exercicios,
+            db.sessoes,
+            db.sessoes_exercicios,
+            async () => {
+              await Promise.all([
+                db.treinos.clear(),
+                db.exercicios.clear(),
+                db.sessoes.clear(),
+                db.sessoes_exercicios.clear()
+              ]);
+
+              if (Array.isArray(data.treinos) && data.treinos.length) {
+                await db.treinos.bulkAdd(data.treinos);
+              }
+              if (Array.isArray(data.exercicios) && data.exercicios.length) {
+                await db.exercicios.bulkAdd(data.exercicios);
+              }
+              if (Array.isArray(data.sessoes) && data.sessoes.length) {
+                await db.sessoes.bulkAdd(data.sessoes);
+              }
+              if (Array.isArray(data.sessoes_exercicios) && data.sessoes_exercicios.length) {
+                await db.sessoes_exercicios.bulkAdd(data.sessoes_exercicios);
+              }
+            }
+          );
+
+          alert('Dados importados com sucesso!');
+          navigate('home');
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao importar dados. Verifique se o arquivo é um backup válido.');
+        } finally {
+          // limpa o valor para permitir importar o mesmo arquivo novamente se quiser
+          fileInput.value = '';
+        }
+      };
+
+      reader.readAsText(file);
+    });
+
+    const btnImport = el('button', {
+      class: 'btn ghost',
+      onclick: () => fileInput.click()
+    }, ['Importar dados de arquivo']);
+
+    const actions = el('div', { class: 'btn-row' }, [
+      btnExport,
+      btnImport
+    ]);
+
+    const container = el('div', {}, [
+      el('h2', {}, ['Backup & Configurações']),
+      info,
+      actions,
+      fileInput
+    ]);
+
+    return container;
   }
 
   // render inicial
